@@ -18,8 +18,9 @@ shape using stored bytes, including encryption overhead.
 | Resumable multipart file | The same manifest boundary, with a durable local job and verified part receipts | Keep checkpoints and reconcile uncertain sends before continuing or discarding |
 | Mounted content write | A separate writable commit references uploaded hidden bodies | Reconcile the journaled operation before deciding whether bodies are disposable |
 
-The current [limits](../../backend/services/file/limits.go) are 1900 MiB per
-stored part, 40 GiB per stored logical file and a defensive maximum of 32 parts.
+The current fork [limits](../../backend/services/file/limits.go) are 1900 MiB per
+stored part, 256 GiB per stored logical file and a defensive maximum of 1024 parts.
+The upstream limits are 40 GiB per logical file and 32 parts.
 These are application limits, applied uniformly; an encrypted file can cross a
 part boundary because its stored size exceeds its plaintext size.
 A stored size of zero is the other bound: Telegram rejects an empty document, so

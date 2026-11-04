@@ -76,7 +76,7 @@ func (s *Service) startResumableUpload(ctx context.Context, uploadID int, source
 }
 
 // buildResumablePartPlan limits the worst-case retransmission to about 512 MiB
-// for ordinary large files, while retaining the existing 32-part wire limit.
+// for ordinary large files, while enforcing the fork's bounded part count.
 // The chosen size is persisted, so later app versions cannot change a job.
 func (s *Service) buildResumablePartPlan(size int64) (uploadPartPlan, error) {
 	ceiling := s.maxPartBytes()

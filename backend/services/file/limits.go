@@ -22,14 +22,16 @@ const (
 	// the regular upload path.
 	MinResumableUploadBytes int64 = 2_000_000_000
 
-	// LargeFileMaxBytes is the largest stored size we will split and upload.
-	// Beyond this a file is rejected rather than producing an unwieldy number
-	// of parts.
-	LargeFileMaxBytes int64 = 40 * 1024 * 1024 * 1024 // 40 GiB
+	// LargeFileMaxBytes is the largest stored (ciphertext-inclusive) logical
+	// file we can upload. This fork raises the upstream 40 GiB limit for
+	// archival video files, but retains a bounded maximum for recovery and
+	// defensive memory limits. Per-Telegram-message size is unchanged.
+	LargeFileMaxBytes int64 = 256 * 1024 * 1024 * 1024 // 256 GiB
 
-	// MaxParts bounds the parts per file (defense in depth alongside
-	// LargeFileMaxBytes; 40 GiB / ~1.86 GiB ≈ 22).
-	MaxParts = 32
+	// MaxParts bounds both resumable uploads and restored part metadata.
+	// A 256 GiB file at the target 512 MiB resumable part size needs around
+	// 513 parts with encryption, so 1024 leaves margin for overhead.
+	MaxParts = 1024
 )
 
 // ErrFileTooLarge is wrapped into the error returned for a file beyond the hard

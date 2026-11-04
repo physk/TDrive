@@ -1,0 +1,86 @@
+name: Sync upstream and build 256 GiB CLI
+
+on:
+  push:
+    branches:
+      - large-file-support
+  schedule:
+    # Weekly upstream reconciliation. Fails safely on merge conflicts/tests.
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tdrive-large-file-fork
+  cancel-in-progress: false
+
+jobs:
+  sync-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout patched branch
+        uses: actions/checkout@v4
+        with:
+          ref: large-file-support
+          fetch-depth: 0
+
+      - name: Reconcile upstream master
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add upstream https://github.com/jeetrex17/TDrive.git
+          git fetch upstream master
+          git fetch origin master
+          git switch -C master origin/master
+          git merge --ff-only upstream/master
+          git switch large-file-support
+          git merge --no-edit master
+          # On conflicts, fail instead of force-pushing, dropping our patch,
+          # or silently losing upstream security changes.
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test affected packages
+        run: go test ./backend/services/file ./backend/projection ./backend/crypto ./backend/daemon
+
+      - name: Cross-build CLI for Linux, Windows and Apple Silicon
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for spec in linux/amd64 windows/amd64 darwin/arm64; do
+            GOOS="${spec%/*}"
+            GOARCH="${spec#*/}"
+            binary="dist/tdrive-${GOOS}-${GOARCH}"
+            if [ "$GOOS" = windows ]; then binary="$binary.exe"; fi
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -trimpath -ldflags '-s -w -X main.buildVersion=physk-large-256GiB' \
+              -o "$binary" ./cmd/tdrive
+          done
+          (cd dist && sha256sum tdrive-* > checksums.txt)
+
+      - name: Push reconciled upstream and tested patch
+        if: github.event_name != 'push'
+        run: |
+          set -euo pipefail
+          git push origin HEAD:refs/heads/large-file-support
+          git push origin refs/heads/master:refs/heads/master
+
+      - name: Upload tested CLI binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdrive-256GiB-cli
+          path: |
+            dist/tdrive-*
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 30
